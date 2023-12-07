@@ -1,0 +1,214 @@
+---
+title: "Landscape of Sexually Transmitted Diseases in California"
+author: "Debbie Argueta Rufino"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+always_allow_html: TRUE
+date: "`r Sys.Date()`"
+---
+
+<br>
+
+```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
+library(data.table)
+library(tidyverse)
+library(dplyr)
+library(plotly)
+library(DT)
+library(knitr)
+
+# Initialize code chunk options
+opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  eval=TRUE,
+  echo = TRUE,
+  cache = FALSE,
+  fig.width = 7, 
+  fig.align = 'center',
+  fig.asp = 0.618,
+  out.width = "700px")
+
+```
+
+# Introduction
+
+This data comprises statistics on the number of cases and infection rates of sexually transmitted diseases (specifically chlamydia, gonorrhea, and early syphilis, encompassing primary, secondary, and early latent syphilis) that have been reported for California residents. The data is categorized by disease type, county, year, and gender.
+
+The data was collected for cases with estimated diagnosis dates spanning from 2001 up to the most recent year available. It was sourced from California Confidential Morbidity Reports and Laboratory Reports, all of which were submitted to the California Department of Public Health (CDPH) by July of the current year. These reports adhered to the surveillance case definition for each respective disease.
+
+After looking at the data, the main question of interest we wanted to investigate was : Which STD has the highest prevalence in California, and how is this disease geographically spread across the state? Further analysis was conducted to look at the year that had the highest STD rates and the difference between infection rates based on sex.
+
+You can download the report by clicking the "**Download the report**" button on the top.
+
+# Methods
+
+## Data acquisition
+
+The STD data was retrieved from "<https://data.chhs.ca.gov/dataset/stds-in-california-by-disease-county-year-and-sex>".
+
+```{r readin-data, echo = FALSE}
+std <- data.table::fread("std.csv")
+```
+
+The geographical data was retrieved from "<https://public.opendatasoft.com/explore/dataset/us-county-boundaries/export/?disjunctive.statefp&disjunctive.countyfp&disjunctive.name&disjunctive.namelsad&disjunctive.stusab&disjunctive.state_name&refine.stusab=CA>".
+
+```{r echo = FALSE}
+CA <- data.table::fread("us-county-boundaries.csv")
+CA <- CA[,.(NAME, INTPTLAT, INTPTLON)]
+```
+
+## Data cleaning and wrangling
+
+1.  Merge *STD* and *Geographic dataset*. The STD data did not include any latitude and longitude coordinates, thus the second data set was introduced to conduct a proper geographic analysis. First, we merged the main data set with the geographic data set.
+
+```{r echo = FALSE}
+std <- merge(
+  x = std,
+  y = CA,
+  by.x = "County",
+  by.y = "NAME",
+  all.x = TRUE,
+  all.y = FALSE,
+  allow.cartesian = TRUE
+)
+
+```
+
+2.  The combined data set has 11 columns. Among them, columns "Cases" and "Rate" have several missing values because of the "Annotation Code" variable, which prevents them from being publicized. Therefore, these missing values were removed.
+
+```{r echo = FALSE}
+std <- filter(std, !is.na(Cases))
+std$Rate[which(std$Rate == "-")] <- NA
+std$Rate[which(std$Rate == "-")] <- NA
+std <- filter(std, !is.na(Rate))
+```
+
+3.  The data type of the column "Rate" is chr (character), so we changed it into a numeric format.
+
+```{r echo = FALSE}
+std[ , Rate := gsub("\\*", "", Rate)]
+std[ , Rate := as.numeric(Rate)]
+```
+
+4.  The "County" column includes rows called "California", which is the state not a county, so we delete them. I saved the aggregate "California" data into a new variable "Cali".
+
+```{r echo = FALSE}
+Cali <- std[County == "California"]
+std <- std[County != "California"]
+
+```
+
+## Libraries used
+
+The libraries utilized include : *data.table*, *tidyverse*, *dplyr*, *plotly*, *DT*, *knitr*
+
+<br>
+
+# Results
+
+```{r echo = FALSE}
+table_sex <- Cali[ , .(
+  NumofDiseases = length(Cases),
+  Cases_avg = round(mean(Cases, na.rm = TRUE)),
+  Cases_sd = sd(Cases, na.rm = TRUE),
+  Rate_avg = mean(Rate, na.rm = TRUE),
+  Rate_sd = sd(Rate, na.rm = TRUE)
+  ), by = .(Year, Sex)]
+knitr::kable(table_sex, col.names = c("Year", "Sex", "Count of Diseases", "Cases Avg", "Cases SD", "Rate Avg", "Rate SD"))
+```
+
+## Figures and Tables {.tabset}
+
+```{r echo = FALSE}
+lineplot_01to20 <- ggplot(data = Cali[Sex == "Total"], mapping = aes(x = Year, y = Rate, colour = Disease)) + geom_line() + geom_point() + 
+  theme(legend.position = "bottom", legend.text = element_text(size = 3.5), legend.title = element_text(size = 3), 
+        axis.text = element_text(size = 8), axis.title = element_text(size = 8)) +
+  scale_x_continuous(breaks = seq(2001, 2020, 1)) +
+  labs(y = "Rate(%)", title = "STD Rates from 2001 to 2020")
+```
+
+### Figure 1
+
+```{r lineplot_01to20, echo = FALSE}
+ggplotly(lineplot_01to20)
+```
+
+```{r echo = FALSE}
+ boxplot_01to20 <- ggplot() + 
+  geom_boxplot(data = std[Sex == "Total" & Disease == "Chlamydia"], mapping = aes(y = Rate, x = Year, group = Year)) +
+  scale_x_continuous(breaks = seq(2001, 2020, 1)) +
+  labs(y = "Rate(%)", title = "Boxplot of infection rate of Chlamydia from 2001 to 2020") 
+```
+
+### Figure 2
+
+```{r boxplot_01to20, echo = FALSE}
+ggplotly(boxplot_01to20)
+```
+
+```{r echo = FALSE}
+barplot_2019 <- ggplot() + 
+  geom_bar(data = std[Sex == "Total" & Disease == "Chlamydia" & Year == 2019], mapping = aes(x = County, y = Rate), stat = "identity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7)) +
+  labs(y = "Rate(%)", title = "Barplot of infection rate of Chlamydia in different counties in 2019") 
+```
+
+### Figure 3
+
+```{r barplot_2019, echo = FALSE}
+ggplotly(barplot_2019)
+```
+
+```{r echo = FALSE}
+library(leaflet)
+Lake_2019 <- std[Sex == "Total" & Disease == "Chlamydia" & Year == 2019]
+Lake_2019_pal <- colorNumeric(c('pink','lightblue','purple'), domain = Lake_2019$Rate)
+
+leaflet_Lake_2019 <- leaflet(Lake_2019) %>% 
+  addProviderTiles('CartoDB.Positron') %>% 
+  addCircles(
+    lat = ~INTPTLAT, lng = ~ INTPTLON,
+    label = ~paste0(Rate), color = ~ Lake_2019_pal(Rate),
+    opacity = 1, fillOpacity = 1, radius = 500
+    ) %>%
+  addLegend('bottomleft', pal = Lake_2019_pal, values = Lake_2019$Rate,
+          title = 'Infection Rate (%)', opacity = 1) %>%
+  addControl("Leaflet map of the infection rate of Chlamydia in 2019", position = "topright")
+```
+
+### Figure 4
+
+```{r leaflet_Lake_2019, echo = FALSE}
+leaflet_Lake_2019
+```
+
+```{r echo = FALSE}
+# Filter the data
+Lake_County_2019 <- std[Disease == "Chlamydia" & County == "Lake" & Year == 2019]
+
+# Aggregate data by sex
+Aggregated_Lake_County_2019 <- Lake_County_2019[, .(Cases = sum(Cases), Population = sum(Population)), by = Sex]
+
+# Calculate the Rate
+Aggregated_Lake_County_2019[, Rate := (Cases / Population) * 100, by = Sex]
+
+# Display the aggregated data
+knitr::kable(Aggregated_Lake_County_2019)
+```
+
+### Table 1
+
+```{r Aggregated_Lake_County_2019, echo = FALSE}
+datatable(Aggregated_Lake_County_2019)
+```
+
+<br>
+
+# Conclusion
+
+Chlamydia held its position as the most prevalent STD in California from 2001 to 2020. The year 2019 witnessed the highest infection rates statewide, with Lake County bearing the brunt of this issue.
+
+An apparent geographic pattern emerged, with the central valley reporting the highest infection rates and a gradual decrease towards the Nevada border. Additionally, a notable gender discrepancy was observed in Lake County in 2019, where females reported twice as many infections as males, highlighting the importance of tailored interventions and awareness initiatives.

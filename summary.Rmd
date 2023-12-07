@@ -1,0 +1,75 @@
+---
+title: "Summary Tables"
+author: "Debbie Argueta Rufino"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
+library(data.table)
+library(tidyverse)
+library(dplyr)
+library(DT)
+library(knitr)
+
+# Initialize code chunk options
+opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  eval=TRUE,
+  echo = TRUE,
+  cache = FALSE,
+  fig.width = 7, 
+  fig.align = 'center',
+  fig.asp = 0.618,
+  out.width = "700px")
+
+```
+
+
+```{r readin-data, echo = FALSE}
+std <- data.table::fread("std.csv")
+```
+
+```{r echo = FALSE}
+CA <- data.table::fread("us-county-boundaries.csv")
+CA <- CA[,.(NAME, INTPTLAT, INTPTLON)]
+```
+
+```{r echo = FALSE}
+std <- merge(
+  x = std,
+  y = CA,
+  by.x = "County",
+  by.y = "NAME",
+  all.x = TRUE,
+  all.y = FALSE,
+  allow.cartesian = TRUE
+)
+
+```
+
+```{r echo = FALSE}
+std <- filter(std, !is.na(Cases))
+std$Rate[which(std$Rate == "-")] <- NA
+std$Rate[which(std$Rate == "-")] <- NA
+std <- filter(std, !is.na(Rate))
+```
+
+```{r echo = FALSE}
+std[ , Rate := gsub("\\*", "", Rate)]
+std[ , Rate := as.numeric(Rate)]
+```
+
+```{r echo = FALSE}
+Cali <- std[County == "California"]
+std <- std[County != "California"]
+
+```
+
+Summary Table
+
+```{r Summary Tabl, echo = FALSE}
+datatable(std)
+```

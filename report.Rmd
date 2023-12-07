@@ -1,0 +1,126 @@
+---
+title: "Landscape of Sexually Transmitted Diseases in California"
+author: "Debbie Argueta Rufino"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document: default
+  html_document: FALSE
+
+
+<br>
+
+
+```{r setup, message=FALSE, echo=FALSE, warning=FALSE}
+library(data.table)
+library(tidyverse)
+library(dplyr)
+library(plotly)
+library(DT)
+library(knitr)
+
+# Initialize code chunk options
+opts_chunk$set(
+  warning = FALSE,
+  message = FALSE,
+  eval=TRUE,
+  echo = TRUE,
+  cache = FALSE,
+  fig.width = 7, 
+  fig.align = 'center',
+  fig.asp = 0.618,
+  out.width = "700px")
+
+```
+
+# Introduction
+
+This data comprises statistics on the number of cases and infection rates of sexually transmitted diseases (specifically chlamydia, gonorrhea, and early syphilis, encompassing primary, secondary, and early latent syphilis) that have been reported for California residents. The data is categorized by disease type, county, year, and gender.
+
+The data was collected for cases with estimated diagnosis dates spanning from 2001 up to the most recent year available. It was sourced from California Confidential Morbidity Reports and Laboratory Reports, all of which were submitted to the California Department of Public Health (CDPH) by July of the current year. These reports adhered to the surveillance case definition for each respective disease.
+
+After looking at the data, the main question of interest we wanted to investigate was : Which STD has the highest prevalence in California, and how is this disease geographically spread across the state? Further analysis was conducted to look at the year that had the highest STD rates and the difference between infection rates based on sex.
+
+You can download the report by clicking the "**Download the report**" button on the top.
+
+
+# Methods
+
+## Data acquisition
+
+The STD data was retrieved from "https://data.chhs.ca.gov/dataset/stds-in-california-by-disease-county-year-and-sex".
+```{r readin-data, echo = FALSE}
+std <- data.table::fread("std.csv")
+```
+
+The geographical data was retrieved from "https://public.opendatasoft.com/explore/dataset/us-county-boundaries/export/?disjunctive.statefp&disjunctive.countyfp&disjunctive.name&disjunctive.namelsad&disjunctive.stusab&disjunctive.state_name&refine.stusab=CA". 
+```{r echo = FALSE}
+CA <- data.table::fread("us-county-boundaries.csv")
+CA <- CA[,.(NAME, INTPTLAT, INTPTLON)]
+```
+
+## Data cleaning and wrangling
+
+
+1. Merge *STD* and *Geographic dataset*. 
+The STD data did not include any latitude and longitude coordinates, thus the second data set was introduced to conduct a proper geographic analysis. First, we merged the main data set with the geographic data set.
+
+```{r echo = FALSE}
+std <- merge(
+  x = std,
+  y = CA,
+  by.x = "County",
+  by.y = "NAME",
+  all.x = TRUE,
+  all.y = FALSE,
+  allow.cartesian = TRUE
+)
+
+```
+
+2. The combined data set has 11 columns. Among them, columns “Cases” and “Rate” have several missing values because of the “Annotation Code” variable, which prevents them from being publicized. Therefore, these missing values were removed.
+
+```{r echo = FALSE}
+std <- filter(std, !is.na(Cases))
+std$Rate[which(std$Rate == "-")] <- NA
+std$Rate[which(std$Rate == "-")] <- NA
+std <- filter(std, !is.na(Rate))
+```
+
+3. The data type of the column “Rate” is chr (character), so we changed it into a numeric format.
+```{r echo = FALSE}
+std[ , Rate := gsub("\\*", "", Rate)]
+std[ , Rate := as.numeric(Rate)]
+```
+
+4. The “County” column includes rows called “California”, which is the state not a county, so we delete them. I saved the aggregate “California” data into a new variable “Cali”.
+```{r echo = FALSE}
+Cali <- std[County == "California"]
+std <- std[County != "California"]
+
+```
+
+## Libraries used
+The libraries utilized include : *data.table*, *tidyverse*, *dplyr*, *plotly*, *DT*, *knitr*
+
+<br>
+
+# Results 
+
+```{r echo = FALSE}
+table_sex <- Cali[ , .(
+  NumofDiseases = length(Cases),
+  Cases_avg = round(mean(Cases, na.rm = TRUE)),
+  Cases_sd = sd(Cases, na.rm = TRUE),
+  Rate_avg = mean(Rate, na.rm = TRUE),
+  Rate_sd = sd(Rate, na.rm = TRUE)
+  ), by = .(Year, Sex)]
+knitr::kable(table_sex, col.names = c("Year", "Sex", "Count of Diseases", "Cases Avg", "Cases SD", "Rate Avg", "Rate SD"))
+```
+
+# Discussion
+
+This analysis gives a preliminary overview of STD infection rates  in California.  The observed variations in the decline of syphilis and gonorrhea rates in contrast to chlamydia rates in 2020 raise intriguing questions. While chlamydia exhibits a more pronounced decrease, syphilis and gonorrhea seem less affected. Investigating the potential factors influencing these distinct patterns could be a valuable avenue for further research. Possible contributors may include variations in testing practices, public health interventions, or the unique nature of each infection.
+
+The stark gender disparity identified in Lake County in 2019 prompts an exploration into whether similar patterns exist across the broader dataset. Unraveling the factors contributing to such differences could provide valuable insights into the targeted development of interventions. Understanding whether these disparities are consistent or vary across different regions and demographics would be pivotal in tailoring public health strategies to address the specific needs of affected populations.
+
+It's crucial to acknowledge the potential influence of external factors on reporting accuracy. Changes in healthcare access, awareness campaigns, or even disruptions caused by external events (such as the COVID-19 pandemic) could impact testing rates and subsequently affect the reported data. A comprehensive analysis should consider these elements to provide a nuanced interpretation of the observed trends.
